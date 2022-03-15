@@ -24,25 +24,27 @@ const mockFetchItemsResult = async () => {
       tokenId: 1,
       name: "Silver",
       description: "This is a silver box",
-      image: "https://picsum.photos/500/500",
+      image: "https://picsum.photos/64",
     },
     {
       contractAddress: "0x2d677Dbe16752A066ef83e382DcC04D7003A61Ed ",
       tokenId: 1,
       name: "Gold",
       description: "This is a gold box",
-      image: "https://picsum.photos/500/500",
+      image: "https://picsum.photos/64",
     },
     {
       contractAddress: "0xcdd02E7849CBBfeaF6401cfDc434999ff5fC0f04",
       tokenId: 1,
       name: "Platinum",
       description: "This is a platinum box",
-      image: "https://picsum.photos/500/500",
+      image: "https://picsum.photos/64",
     },
   ];
-  const items = nList.map(() => {
-    return mockedItems[Math.floor(Math.random() * mockedItems.length)];
+  const items = nList.map((n) => {
+    const randomMockedItem =
+      mockedItems[Math.floor(Math.random() * mockedItems.length)];
+    return { ...randomMockedItem, image: randomMockedItem.image + `?${n}` };
   });
   if (Math.floor(Math.random() * 100) < 10) throw "Forced fetch items ERROR";
   return new Promise((resolve) => {

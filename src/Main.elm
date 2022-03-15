@@ -189,8 +189,15 @@ view model =
                                             [ Attr.style "margin-right" "20px"
                                             ]
                                             [ img
-                                                [ Attr.src item.image
-                                                , Attr.style "width" "20px"
+                                                [ Attr.src <| item.image
+                                                , Attr.style "width"
+                                                    (if model.itemsSize == "small" then
+                                                        "20px"
+
+                                                     else
+                                                        "40px"
+                                                    )
+                                                , Attr.alt ""
                                                 ]
                                                 []
                                             ]
@@ -210,6 +217,7 @@ view model =
                                             [ img
                                                 [ Attr.src item.image
                                                 , Attr.style "width" "64px"
+                                                , Attr.alt ""
                                                 ]
                                                 []
                                             ]
