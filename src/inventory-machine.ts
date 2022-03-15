@@ -1,62 +1,58 @@
 import { assign, createMachine } from "xstate";
 
-interface Context {
-  pageSize: number;
-  page: number;
-  itemsSize: string;
-  sortBy: string;
-  totalItems: number;
-  items: {
-    artistName: string;
-    id: string;
-    price: number;
-    currency: string;
-    end: string;
-  }[];
+interface Item {
+  contractAddress: string;
+  tokenId: number;
+  name: string;
+  description: string;
+  image: string;
 }
-const mockFetchItemsResult = async (
-  sortBy: string,
-  skip: number,
-  limit: number
-) => {
-  const totalItems = 100;
-  const nList = [...Array(100).keys()];
-  const endDate = new Date();
-  console.log("sortBy: ", sortBy, "skip: ", skip, "limit: ", limit);
-  const items = nList.slice(skip, skip + limit).map((n) => {
-    return {
-      artistName: `${sortBy}-${n}`,
-      id: `${n}`,
-      price: 12.3,
-      currency: "ETH",
-      end: endDate.toISOString(),
-    };
+
+interface Context {
+  itemsSize: string;
+  totalItems: number;
+  items: Item[];
+  selectedItem: Item;
+}
+
+const mockFetchItemsResult = async () => {
+  const totalItems = 10;
+  const nList = [...Array(10).keys()];
+  const mockedItems = [
+    {
+      contractAddress: "0x06012c8cf97BEaD5deAe237070F9587f8E7A266d",
+      tokenId: 1,
+      name: "Silver",
+      description: "This is a silver box",
+      image: "https://picsum.photos/500/500",
+    },
+    {
+      contractAddress: "0x2d677Dbe16752A066ef83e382DcC04D7003A61Ed ",
+      tokenId: 1,
+      name: "Gold",
+      description: "This is a gold box",
+      image: "https://picsum.photos/500/500",
+    },
+    {
+      contractAddress: "0xcdd02E7849CBBfeaF6401cfDc434999ff5fC0f04",
+      tokenId: 1,
+      name: "Platinum",
+      description: "This is a platinum box",
+      image: "https://picsum.photos/500/500",
+    },
+  ];
+  const items = nList.map(() => {
+    return mockedItems[Math.floor(Math.random() * mockedItems.length)];
   });
-  if (Math.floor(Math.random() * 100) < 30) throw "Forced fetch items ERROR";
+  if (Math.floor(Math.random() * 100) < 10) throw "Forced fetch items ERROR";
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({ totalItems, items });
     }, 500);
   }) as Promise<{
     totalItems: number;
-    items: {
-      artistName: string;
-      id: string;
-      price: number;
-      currency: string;
-      end: string;
-    }[];
+    items: Item[];
   }>;
-};
-
-const canChangePage = (context: Context, event) => {
-  const lastPage = Math.ceil(context.totalItems / context.pageSize);
-  return event.page <= lastPage && event.page > 0;
-};
-
-const cannotChangePage = (context: Context, event) => {
-  const lastPage = Math.ceil(context.totalItems / context.pageSize);
-  return event.page > lastPage && event.page == 0;
 };
 
 export const itemsMachine = createMachine(
@@ -66,36 +62,26 @@ export const itemsMachine = createMachine(
     schema: {
       context: {} as Context,
       events: {} as
-        | { type: "ITEMS.SORT_CHANGED"; sortBy: string }
-        | { type: "PAGE.SIZE_CHANGED"; pageSize: number }
-        | { type: "PAGE.PAGE_CHANGED"; page: number }
         | { type: "ITEMS.SIZE_CHANGED"; itemsSize: string }
-        | { type: "ITEMS.RELOAD" },
+        | { type: "ITEMS.RELOAD" }
+        | { type: "ITEM.CLICKED"; selectedItem: number },
       services: {} as {
         fetchItems: {
           data: {
             totalItems: number;
-            items: {
-              artistName: string;
-              id: string;
-              price: number;
-              currency: string;
-              end: string;
-            }[];
+            items: Item[];
           };
         };
       },
     },
     context: {
-      pageSize: 15,
-      page: 1,
       itemsSize: "small",
-      sortBy: "artistName",
       totalItems: 0,
       items: [],
+      selectedItem: null,
     },
     states: {
-      loading: {
+      initial: {
         invoke: {
           id: "fetch-items",
           src: "fetchItems",
@@ -108,50 +94,32 @@ export const itemsMachine = createMachine(
       },
       display: {
         on: {
-          "PAGE.SIZE_CHANGED": {
-            target: "loading",
-            actions: "updatePageSize",
-          },
-          "PAGE.PAGE_CHANGED": [
-            {
-              target: "loading",
-              cond: canChangePage,
-              actions: "updatePage",
-            },
-            {
-              target: "display",
-              cond: cannotChangePage,
-            },
-          ],
           "ITEMS.SIZE_CHANGED": {
             actions: "updateItemsSize",
           },
-          "ITEMS.SORT_CHANGED": {
-            target: "loading",
-            actions: "updateSortBy",
+          "ITEM.CLICKED": {
+            actions: "updateSelectedItem",
           },
         },
       },
       failed: {
         on: {
           "ITEMS.RELOAD": {
-            target: "loading",
+            target: "initial",
           },
         },
       },
     },
-    initial: "loading",
+    initial: "initial",
   },
   {
     services: {
       fetchItems: async (context) => {
-        const skip = context.pageSize * (context.page - 1);
-        const limit = context.pageSize;
         // const response = await fetch(
         //   `https://www.bgf.com/?sortby=${context.sortBy}&skip=${skip}&limit=${limit}`
         // );
         // const json = await response.json();
-        const json = await mockFetchItemsResult(context.sortBy, skip, limit);
+        const json = await mockFetchItemsResult();
         console.log("json", json);
         return json;
       },
@@ -162,19 +130,8 @@ export const itemsMachine = createMachine(
           ...context,
           items: event.data.items,
           totalItems: event.data.totalItems,
-        };
-      }),
-      updatePageSize: assign((context, event) => {
-        return {
-          ...context,
-          page: 1,
-          pageSize: event.pageSize,
-        };
-      }),
-      updatePage: assign((context, event) => {
-        return {
-          ...context,
-          page: event.page,
+          selectedItem:
+            event.data.items.length > 0 ? event.data.items[0] : null,
         };
       }),
       updateItemsSize: assign((context, event) => {
@@ -183,11 +140,10 @@ export const itemsMachine = createMachine(
           itemsSize: event.itemsSize,
         };
       }),
-      updateSortBy: assign((context, event) => {
+      updateSelectedItem: assign((context, event) => {
         return {
           ...context,
-          page: 1,
-          sortBy: event.sortBy,
+          selectedItem: context.items[event.selectedItem],
         };
       }),
     },

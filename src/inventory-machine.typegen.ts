@@ -4,10 +4,8 @@ export interface Typegen0 {
   "@@xstate/typegen": true;
   eventsCausingActions: {
     updateItems: "done.invoke.fetch-items";
-    updatePageSize: "PAGE.SIZE_CHANGED";
-    updatePage: "PAGE.PAGE_CHANGED";
     updateItemsSize: "ITEMS.SIZE_CHANGED";
-    updateSortBy: "ITEMS.SORT_CHANGED";
+    updateSelectedItem: "ITEM.CLICKED";
   };
   internalEvents: {
     "done.invoke.fetch-items": {
@@ -31,14 +29,10 @@ export interface Typegen0 {
     delays: never;
   };
   eventsCausingServices: {
-    fetchItems:
-      | "PAGE.SIZE_CHANGED"
-      | "PAGE.PAGE_CHANGED"
-      | "ITEMS.SORT_CHANGED"
-      | "ITEMS.RELOAD";
+    fetchItems: "ITEMS.RELOAD";
   };
   eventsCausingGuards: {};
   eventsCausingDelays: {};
-  matchesStates: "loading" | "display" | "failed";
+  matchesStates: "initial" | "display" | "failed";
   tags: never;
 }

@@ -19,7 +19,7 @@ const elm = Elm.Main.init({
 const itemsInterpreter = interpret(itemsMachine, {
   devTools: true,
 });
-registerActor("ITEMS", itemsInterpreter, itemsMachine.events);
+registerActor("items", itemsInterpreter, itemsMachine.events);
 
 itemsInterpreter.onTransition((state) => {
   elm.ports.stateChanged.send(state);

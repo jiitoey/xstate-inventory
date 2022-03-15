@@ -21,22 +21,20 @@ main =
 
 
 type alias Item =
-    { artistName : String
-    , id : String
-    , price : Float
-    , currency : String
-    , end : String
+    { contractAddress : String
+    , tokenId : Int
+    , name : String
+    , description : String
+    , image : String
     }
 
 
 type alias Model =
     { state : State
-    , pageSize : Int
-    , page : Int
     , itemsSize : String
-    , sortBy : String
     , totalItems : Int
     , items : List Item
+    , selectedItem : Maybe Item
     }
 
 
@@ -48,14 +46,12 @@ type State
 
 modelDecoder : D.Decoder Model
 modelDecoder =
-    D.map7 Model
+    D.map5 Model
         stateDecoder
-        pageSizeDecoder
-        pageDecoder
         itemsSizeDecoder
-        sortByDecoder
         totalItemsDecoder
         itemsDecoder
+        selectedItemDecoder
 
 
 stateDecoder : D.Decoder State
@@ -78,24 +74,9 @@ stateDecoder =
             )
 
 
-pageSizeDecoder : D.Decoder Int
-pageSizeDecoder =
-    D.at [ "context", "pageSize" ] D.int
-
-
-pageDecoder : D.Decoder Int
-pageDecoder =
-    D.at [ "context", "page" ] D.int
-
-
 itemsSizeDecoder : D.Decoder String
 itemsSizeDecoder =
     D.at [ "context", "itemsSize" ] D.string
-
-
-sortByDecoder : D.Decoder String
-sortByDecoder =
-    D.at [ "context", "sortBy" ] D.string
 
 
 totalItemsDecoder : D.Decoder Int
@@ -111,32 +92,33 @@ itemsDecoder =
 itemDecoder : D.Decoder Item
 itemDecoder =
     D.succeed Item
-        |> P.required "artistName" D.string
-        |> P.required "id" D.string
-        |> P.required "price" D.float
-        |> P.required "currency" D.string
-        |> P.required "end" D.string
+        |> P.required "contractAddress" D.string
+        |> P.required "tokenId" D.int
+        |> P.required "name" D.string
+        |> P.required "description" D.string
+        |> P.required "image" D.string
+
+
+selectedItemDecoder : D.Decoder (Maybe Item)
+selectedItemDecoder =
+    D.nullable (D.at [ "context", "selectedItem" ] itemDecoder)
 
 
 type Msg
     = StateChanged Model
     | DecodeStateError D.Error
-    | PageChanged Int
-    | PageSizeChanged Int
     | ItemsSizeChanged String
-    | SortChanged String
-    | ReloadClicked
+    | ItemsReloadClicked
+    | ItemClicked Int
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { state = Loading
-      , pageSize = 15
-      , page = 1
       , itemsSize = "small"
-      , sortBy = "artistName"
       , totalItems = 0
       , items = []
+      , selectedItem = Nothing
       }
     , Cmd.none
     )
@@ -151,28 +133,8 @@ update msg model =
         DecodeStateError _ ->
             ( model, Cmd.none )
 
-        PageChanged page ->
-            ( { model | page = page }
-            , MachineConnector.event
-                (E.object
-                    [ ( "type", E.string "PAGE.PAGE_CHANGED" )
-                    , ( "page", E.int page )
-                    ]
-                )
-            )
-
-        PageSizeChanged pageSize ->
-            ( { model | pageSize = pageSize }
-            , MachineConnector.event
-                (E.object
-                    [ ( "type", E.string "PAGE.SIZE_CHANGED" )
-                    , ( "pageSize", E.int pageSize )
-                    ]
-                )
-            )
-
         ItemsSizeChanged itemsSize ->
-            ( { model | itemsSize = itemsSize }
+            ( model
             , MachineConnector.event
                 (E.object
                     [ ( "type", E.string "ITEMS.SIZE_CHANGED" )
@@ -181,21 +143,21 @@ update msg model =
                 )
             )
 
-        SortChanged sortBy ->
-            ( { model | sortBy = sortBy }
-            , MachineConnector.event
-                (E.object
-                    [ ( "type", E.string "ITEMS.SORT_CHANGED" )
-                    , ( "sortBy", E.string sortBy )
-                    ]
-                )
-            )
-
-        ReloadClicked ->
+        ItemsReloadClicked ->
             ( model
             , MachineConnector.event
                 (E.object
                     [ ( "type", E.string "ITEMS.RELOAD" )
+                    ]
+                )
+            )
+
+        ItemClicked index ->
+            ( model
+            , MachineConnector.event
+                (E.object
+                    [ ( "type", E.string "ITEM.CLICKED" )
+                    , ( "selectedItem", E.int index )
                     ]
                 )
             )
@@ -208,18 +170,6 @@ view model =
             [ text <| "Inventory (" ++ String.fromInt model.totalItems ++ ")"
             ]
         , div []
-            [ text "Sort By: "
-            , button [ onClick <| SortChanged "artistName" ] [ text "Artist Name" ]
-            , button [ onClick <| SortChanged "id" ] [ text "ID" ]
-            , button [ onClick <| SortChanged "price" ] [ text "Price" ]
-            , button [ onClick <| SortChanged "end" ] [ text "End Date" ]
-            ]
-        , div []
-            [ text "Page Size: "
-            , button [ onClick <| PageSizeChanged 9 ] [ text "9" ]
-            , button [ onClick <| PageSizeChanged 15 ] [ text "15" ]
-            ]
-        , div []
             [ text "Items Size: "
             , button [ onClick <| ItemsSizeChanged "small" ] [ text "small" ]
             , button [ onClick <| ItemsSizeChanged "large" ] [ text "large" ]
@@ -227,56 +177,58 @@ view model =
         , div [] <|
             case model.state of
                 Display ->
-                    List.map
-                        (\item ->
-                            div
-                                [ Attr.style "font-size" model.itemsSize
-                                ]
-                                [ span [ Attr.style "margin-right" "20px" ] [ text item.artistName ]
-                                , span [ Attr.style "margin-right" "20px" ] [ text item.id ]
-                                , span [ Attr.style "margin-right" "20px" ] [ text <| String.fromFloat item.price ]
-                                , span [ Attr.style "margin-right" "20px" ] [ text item.currency ]
-                                , span [ Attr.style "margin-right" "20px" ] [ text item.end ]
-                                ]
-                        )
-                    <|
-                        model.items
+                    p [] [ text "Selected Item:" ]
+                        :: (List.indexedMap
+                                (\index item ->
+                                    div
+                                        [ Attr.style "font-size" model.itemsSize
+                                        , onClick <| ItemClicked index
+                                        ]
+                                        [ span [ Attr.style "margin-right" "20px" ] [ text <| String.fromInt item.tokenId ]
+                                        , span
+                                            [ Attr.style "margin-right" "20px"
+                                            ]
+                                            [ img
+                                                [ Attr.src item.image
+                                                , Attr.style "width" "20px"
+                                                ]
+                                                []
+                                            ]
+                                        , span [ Attr.style "margin-right" "20px" ] [ text item.name ]
+                                        , span [ Attr.style "margin-right" "20px" ] [ text item.description ]
+                                        ]
+                                )
+                            <|
+                                model.items
+                           )
+                        ++ [ div [ Attr.style "margin-top" "20px" ] <|
+                                case model.selectedItem of
+                                    Just item ->
+                                        [ p [] [ text "Selected Item:" ]
+                                        , span [ Attr.style "margin-right" "20px" ] [ text <| String.fromInt item.tokenId ]
+                                        , span [ Attr.style "margin-right" "20px" ]
+                                            [ img
+                                                [ Attr.src item.image
+                                                , Attr.style "width" "64px"
+                                                ]
+                                                []
+                                            ]
+                                        , span [ Attr.style "margin-right" "20px" ] [ text item.name ]
+                                        , span [ Attr.style "margin-right" "20px" ] [ text item.description ]
+                                        ]
+
+                                    Nothing ->
+                                        []
+                           ]
 
                 Loading ->
                     [ span [] [ text "Loading..." ] ]
 
                 Failed ->
                     [ span [] [ text "Failed!" ]
-                    , button [ onClick ReloadClicked ] [ text "RETRY" ]
+                    , button [ onClick ItemsReloadClicked ] [ text "RETRY" ]
                     ]
-        , div []
-            [ text <| "Page: " ++ String.fromInt model.page
-            , button
-                [ onClick <| PageChanged (model.page - 1)
-                , Attr.disabled <| isFirstPage model
-                ]
-                [ text "Back" ]
-            , button
-                [ onClick <| PageChanged (model.page + 1)
-                , Attr.disabled <| isLastPage model
-                ]
-                [ text "Next" ]
-            ]
         ]
-
-
-isFirstPage : Model -> Bool
-isFirstPage model =
-    model.page == 1
-
-
-isLastPage : Model -> Bool
-isLastPage model =
-    let
-        lastPage =
-            ceiling (toFloat model.totalItems / toFloat model.pageSize)
-    in
-    model.page == lastPage
 
 
 subscriptions : Model -> Sub Msg
